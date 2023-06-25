@@ -96,6 +96,7 @@ def get_override():
         return "default"
 
 def set_override(override):
+    root_check() # Calling root_check inside if and elif might be too verbose and is susceptible to bugs in future
     if override in ["powersave", "performance"]:
         with open(governor_override_state, "wb") as store:
             pickle.dump(override, store)
@@ -1135,10 +1136,20 @@ def sysinfo():
     cpu_core = dict()
     freq_per_cpu = []
     for i in range(0, len(coreid_info), 3):
-        freq_per_cpu.append(float(coreid_info[i + 1].split(":")[-1]))
+        # ensure that indices are within the valid range, before accessing the corresponding elements
+        if i + 1 < len(coreid_info):
+            freq_per_cpu.append(float(coreid_info[i + 1].split(":")[-1]))
+        else:
+            # handle the case where the index is out of range
+            continue
+        # ensure that indices are within the valid range, before accessing the corresponding elements
         cpu = int(coreid_info[i].split(":")[-1])
-        core = int(coreid_info[i + 2].split(":")[-1])
-        cpu_core[cpu] = core
+        if i + 2 < len(coreid_info):
+            core = int(coreid_info[i + 2].split(":")[-1])
+            cpu_core[cpu] = core
+        else:
+            # handle the case where the index is out of range
+            continue
 
     online_cpu_count = len(cpu_core)
     offline_cpus = [str(cpu) for cpu in range(total_cpu_count) if cpu not in cpu_core]
@@ -1156,15 +1167,26 @@ def sysinfo():
                 cpu_temp_index = core_temp_labels.index(f"Core {core}")
                 temp_per_cpu[i] = core_temp["coretemp"][cpu_temp_index].current
         else:
-            temp = list(psutil.sensors_temperatures())
-            temp_per_cpu = [core_temp[temp[0]][0].current] * online_cpu_count
+            # iterate over all sensors
+            for sensor in core_temp:
+                # iterate over all temperatures in the current sensor
+                for temp in core_temp[sensor]:
+                    if temp.label == 'CPU':
+                        temp_per_cpu = [temp.current] * online_cpu_count
+                        break
+                else:
+                    continue
+                break
+            else: # if 'CPU' label not found in any sensor, use first available temperature
+                temp = list(core_temp.keys())[0]
+                temp_per_cpu = [core_temp[temp][0].current] * online_cpu_count
     except Exception as e:
         print(repr(e))
         pass
 
     print("Core\tUsage\tTemperature\tFrequency")
     for (cpu, usage, freq, temp) in zip(cpu_core, usage_per_cpu, freq_per_cpu, temp_per_cpu):
-        print(f"CPU{cpu}:\t{usage:>5.1f}%    {temp:>3.0f} °C    {freq:>5.0f} MHz")
+        print(f"CPU{cpu}    {usage:>5.1f}%       {temp:>3.0f} °C     {freq:>5.0f} MHz")
 
     if offline_cpus:
         print(f"\nDisabled CPUs: {','.join(offline_cpus)}")

@@ -19,10 +19,11 @@ auto-cpufreq is looking for [co-maintainers & open source developers to help sha
     * [Snap store](https://github.com/AdnanHodzic/auto-cpufreq/#snap-store)
     * [auto-cpufreq-installer](https://github.com/AdnanHodzic/auto-cpufreq/#auto-cpufreq-installer)
     * [AUR package (Arch/Manjaro Linux)](https://github.com/AdnanHodzic/auto-cpufreq/#aur-package-archmanjaro-linux)
-* [Post Installation](https://github.com/AdnanHodzic/auto-cpufreq/blob/install_performance_rm/README.md#post-installation)
+* [Post Installation](https://github.com/AdnanHodzic/auto-cpufreq/#post-installation)
 * [Configuring auto-cpufreq](https://github.com/AdnanHodzic/auto-cpufreq/#configuring-auto-cpufreq)
-    * [1: power_helper.py script](https://github.com/AdnanHodzic/auto-cpufreq/#1-power_helperpy-script)
-    * [2: auto-cpufreq config file](https://github.com/AdnanHodzic/auto-cpufreq/#2-auto-cpufreq-config-file)
+    * [1: power_helper.py script (Snap package install only)](https://github.com/AdnanHodzic/auto-cpufreq/#1-power_helperpy-script-snap-package-install-only)
+    * [2: `--force` governor override](https://github.com/AdnanHodzic/auto-cpufreq/#2---force-governor-override)
+    * [3: auto-cpufreq config file](https://github.com/AdnanHodzic/auto-cpufreq/#3-auto-cpufreq-config-file)
         * [Example config file contents](https://github.com/AdnanHodzic/auto-cpufreq/#example-config-file-contents)
 * [How to run auto-cpufreq](https://github.com/AdnanHodzic/auto-cpufreq/#how-to-run-auto-cpufreq)
 * [auto-cpufreq modes and options](https://github.com/AdnanHodzic/auto-cpufreq/#auto-cpufreq-modes-and-options)
@@ -302,7 +303,12 @@ If daemon has been installed, live stats of CPU/system load monitoring and optim
 
 **A:** If you're using `intel_pstate/amd-pstate` CPU management driver, consider changing it to `acpi-cpufreq`.
 
-This can be done by editing the `GRUB_CMDLINE_LINUX_DEFAULT` params in `/etc/default/grub`.
+This can be done by editing the `GRUB_CMDLINE_LINUX_DEFAULT` params in `/etc/default/grub`. For instance:
+
+```
+    sudo nano /etc/default/grub
+    # make sure you have nano installed, or you can use your favorite text editor.
+```
 
 For Intel users:
 
@@ -316,7 +322,20 @@ For AMD users:
 GRUB_CMDLINE_LINUX_DEFAULT="quiet splash initcall_blacklist=amd_pstate_init amd_pstate.enable=0"
 ```
 
-After you are done, run `sudo update-grub` or `sudo grub-mkconfig -o /boot/grub/grub.cfg`, if you are using Arch.
+Once you have made the necessary changes to the GRUB configuration file, you can update it by running `sudo update-grub` or `sudo grub-mkconfig -o /boot/grub/grub.cfg` on Arch Linux. On the other hand, for Fedora, you can update the configuration file by running one of the following commands: 
+
+```
+    sudo grub2-mkconfig -o /etc/grub2.cfg
+```
+
+```
+    sudo grub2-mkconfig -o /etc/grub2-efi.cfg
+```
+
+```
+    sudo grub2-mkconfig -o /boot/grub2/grub.cfg  
+    # Legacy boot method for grub update. 
+```
 
 ### AUR
 
