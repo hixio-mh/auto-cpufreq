@@ -29,6 +29,9 @@ from auto_cpufreq.power_helper import *
 
 warnings.filterwarnings("ignore")
 
+# add path to auto-cpufreq executables for GUI
+os.environ["PATH"] += ":/usr/local/bin"
+
 # ToDo:
 # - replace get system/CPU load from: psutil.getloadavg() | available in 5.6.2)
 
@@ -166,13 +169,23 @@ def verify_update():
     # IT IS IMPORTANT TO  THAT IF THE REPOSITORY STRUCTURE IS CHANGED, THE FOLLOWING FUNCTION NEEDS TO BE UPDATED ACCORDINGLY
     # Fetch the latest release information from GitHub API
     latest_release_url = f"https://api.github.com/repos/AdnanHodzic/auto-cpufreq/releases/latest"
-    latest_release = requests.get(latest_release_url).json()
+    try:
+        latest_release = requests.get(latest_release_url).json()
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+            requests.exceptions.RequestException, requests.exceptions.HTTPError) as err:
+        print ("Error Connecting to server!")
+        exit(1)
+
     latest_version =  latest_release["tag_name"]
 
     # Get the current version of auto-cpufreq
     # Extract version number from the output string
     output = check_output(['auto-cpufreq', '--version']).decode('utf-8')
-    version_line = next((re.search(r'\d+\.\d+\.\d+', line).group() for line in output.split('\n') if line.startswith('auto-cpufreq version')), None)
+    try:
+        version_line = next((re.search(r'\d+\.\d+\.\d+', line).group() for line in output.split('\n') if line.startswith('auto-cpufreq version')), None)
+    except AttributeError:
+        print("Error Retrieving Current Version!")
+        exit(1)
     installed_version = "v" + version_line
     #Check whether the same is installed or not
     # Compare the latest version with the installed version and perform update if necessary
@@ -183,19 +196,14 @@ def verify_update():
         print(f"Updates are available,\nCurrent version: {installed_version}\nLatest version: {latest_version}")
         print("Note that your previous custom settings might be erased with the following update")
     
-def new_update():
-    username = os.getlogin()
-    home_dir = "/home/" + username
-    os.chdir(home_dir)
-    current_working_directory = os.getcwd()
-    print("Cloning the latest release to the home directory:  ")
-    print(os.getcwd())
+def new_update(custom_dir):
+    os.chdir(custom_dir)
+    print(f"Cloning the latest release to {custom_dir}")
     run(["git", "clone", "https://github.com/AdnanHodzic/auto-cpufreq.git"])
     os.chdir("auto-cpufreq")
-    print("package cloned to directory ", current_working_directory)
+    print(f"package cloned to directory {custom_dir}")
     run(['./auto-cpufreq-installer'], input='i\n', encoding='utf-8')
-        
-             
+
 # return formatted version for a better readability
 def get_formatted_version():
     literal_version = pkg_resources.require("auto-cpufreq")[0].version
@@ -1191,31 +1199,34 @@ def sysinfo():
     offline_cpus = [str(cpu) for cpu in range(total_cpu_count) if cpu not in cpu_core]
 
     # temperatures
-    core_temp = psutil.sensors_temperatures()
+    temp_sensors = psutil.sensors_temperatures()
     temp_per_cpu = [float("nan")] * online_cpu_count
     try:
-        if "coretemp" in core_temp:
+        # the priority for CPU temp is as follows: coretemp sensor -> sensor with CPU in the label -> acpi -> k10temp
+        if "coretemp" in temp_sensors:
             # list labels in 'coretemp'
-            core_temp_labels = [temp.label for temp in core_temp["coretemp"]]
+            core_temp_labels = [temp.label for temp in temp_sensors["coretemp"]]
             for i, cpu in enumerate(cpu_core):
-                # get correct index in core_temp
+                # get correct index in temp_sensors
                 core = cpu_core[cpu]
                 cpu_temp_index = core_temp_labels.index(f"Core {core}")
-                temp_per_cpu[i] = core_temp["coretemp"][cpu_temp_index].current
+                temp_per_cpu[i] = temp_sensors["coretemp"][cpu_temp_index].current
         else:
             # iterate over all sensors
-            for sensor in core_temp:
+            for sensor in temp_sensors:
                 # iterate over all temperatures in the current sensor
-                for temp in core_temp[sensor]:
-                    if temp.label == 'CPU':
+                for temp in temp_sensors[sensor]:
+                    if 'CPU' in temp.label:
                         temp_per_cpu = [temp.current] * online_cpu_count
                         break
                 else:
                     continue
                 break
-            else: # if 'CPU' label not found in any sensor, use first available temperature
-                temp = list(core_temp.keys())[0]
-                temp_per_cpu = [core_temp[temp][0].current] * online_cpu_count
+            else:
+                if "acpitz" in temp_sensors:
+                    temp_per_cpu = [temp_sensors["acpitz"][0].current] * online_cpu_count
+                elif "k10temp" in temp_sensors:
+                    temp_per_cpu = [temp_sensors["k10temp"][0].current] * online_cpu_count
     except Exception as e:
         print(repr(e))
         pass
