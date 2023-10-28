@@ -13,7 +13,8 @@ import click
 import pickle
 import warnings
 import configparser
-import pkg_resources
+# import pkg_resources
+import importlib.metadata
 from math import isclose
 from pathlib import Path
 from shutil import which
@@ -149,7 +150,7 @@ def app_version():
 
     # snap package
     if os.getenv("PKG_MARKER") == "SNAP":
-        print(getoutput("echo \(Snap\) $SNAP_VERSION"))
+        print(getoutput(r"echo \(Snap\) $SNAP_VERSION"))
     # aur package
     elif dist_name in ["arch", "manjaro", "garuda"]:
         aur_pkg_check = call("pacman -Qs auto-cpufreq > /dev/null", shell=True)
@@ -164,7 +165,10 @@ def app_version():
         except Exception as e:
             print(repr(e))
             pass
-def verify_update():
+
+def check_for_update():
+    # returns True if a new release is available from the GitHub repo
+
     # Specify the repository and package name
     # IT IS IMPORTANT TO  THAT IF THE REPOSITORY STRUCTURE IS CHANGED, THE FOLLOWING FUNCTION NEEDS TO BE UPDATED ACCORDINGLY
     # Fetch the latest release information from GitHub API
@@ -191,10 +195,11 @@ def verify_update():
     # Compare the latest version with the installed version and perform update if necessary
     if latest_version == installed_version:
         print("auto-cpufreq is up to date")
-        exit(0)
+        return False
     else:
         print(f"Updates are available,\nCurrent version: {installed_version}\nLatest version: {latest_version}")
         print("Note that your previous custom settings might be erased with the following update")
+        return True
     
 def new_update(custom_dir):
     os.chdir(custom_dir)
@@ -204,9 +209,26 @@ def new_update(custom_dir):
     print(f"package cloned to directory {custom_dir}")
     run(['./auto-cpufreq-installer'], input='i\n', encoding='utf-8')
 
+def get_literal_version(package_name):
+    try:
+        package_metadata = importlib.metadata.metadata(package_name)
+
+        package_name = package_metadata['Name']
+        metadata_version = package_metadata['Version']
+
+        numbered_version, _, git_version = metadata_version.partition("+")
+
+        # Construct the literal version string
+        literal_version = f"{numbered_version}+{git_version}"
+
+        return literal_version
+
+    except importlib.metadata.PackageNotFoundError:
+        return f"Package '{package_name}' not found"
+
 # return formatted version for a better readability
 def get_formatted_version():
-    literal_version = pkg_resources.require("auto-cpufreq")[0].version
+    literal_version = get_literal_version("auto-cpufreq")
     splitted_version = literal_version.split("+")
     formatted_version = splitted_version[0]
     
@@ -1217,16 +1239,18 @@ def sysinfo():
                 # iterate over all temperatures in the current sensor
                 for temp in temp_sensors[sensor]:
                     if 'CPU' in temp.label:
-                        temp_per_cpu = [temp.current] * online_cpu_count
-                        break
+                        if temp.current != 0:
+                            temp_per_cpu = [temp.current] * online_cpu_count
+                            break
                 else:
                     continue
                 break
             else:
-                if "acpitz" in temp_sensors:
-                    temp_per_cpu = [temp_sensors["acpitz"][0].current] * online_cpu_count
-                elif "k10temp" in temp_sensors:
-                    temp_per_cpu = [temp_sensors["k10temp"][0].current] * online_cpu_count
+                for sensor in ["acpitz", "k10temp"]:
+                    if sensor in temp_sensors:
+                        if temp_sensors[sensor][0].current != 0:
+                            temp_per_cpu = [temp_sensors[sensor][0].current] * online_cpu_count
+                            break;
     except Exception as e:
         print(repr(e))
         pass
